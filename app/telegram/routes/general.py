@@ -149,7 +149,7 @@ async def info_handler(message: types.Message, bot: Bot):
 async def add_channel_handler(message: types.Message, bot: Bot):
     bot_name = (await bot.me()).username
     bot_channel_link = (
-        f"tg://resolve?domain={bot_name}&startchannel&admin=post_messages"
+        f"tg://resolve?domain={bot_name}&startchannel&admin=edit_messages"
     )
     message_text = formatting.TextLink(
         "Use this link to select channel", url=bot_channel_link
