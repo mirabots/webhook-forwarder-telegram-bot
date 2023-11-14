@@ -1,0 +1,11 @@
+aiofile
+aiogram[i18n]
+asyncpg
+cachetools
+fastapi
+httpx
+psycopg2-binary
+pyyaml
+requests
+SQLAlchemy
+uvicorn
