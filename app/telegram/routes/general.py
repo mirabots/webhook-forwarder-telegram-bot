@@ -101,23 +101,28 @@ async def stop_channel_handler(event: types.ChatMemberUpdated, bot: Bot):
     if event.chat.type in ("group", "supergroup", "private"):
         return
 
-    from_name = event.from_user.username
     from_id = event.from_user.id
+    from_name = event.from_user.username
     chat_id = event.chat.id
+    chat_title = event.chat.title
     bot_id = (await bot.get_me()).id
 
-    if (
-        from_id == bot_id
-        or (await crud_chats.check_ownership(chat_id, from_id))
-        or from_name in cfg.TELEGRAM_ALLOWED
-    ):
-        print(
-            f"Stop: {from_id=} {event.from_user.username=} {chat_id=} {event.chat.title=} {time.asctime()}"
-        )
+    if from_id == bot_id:
+        from_id = await crud_chats.get_owner(chat_id)
+        if from_id == None:
+            return
 
-        await crud_chats.remove_chats([chat_id])
-        message_text = f"Notification\nBot leaved from channel '{event.chat.title}'"
-        await bot.send_message(chat_id=from_id, text=message_text)
+    if (
+        not (await crud_chats.check_ownership(chat_id, from_id))
+        or from_name not in cfg.TELEGRAM_ALLOWED
+    ):
+        return
+
+    print(f"Stop: {from_id=} {from_name=} {chat_id=} {chat_title=} {time.asctime()}")
+
+    await crud_chats.remove_chats([chat_id])
+    message_text = f"Notification\nBot leaved from channel '{chat_title}'"
+    await bot.send_message(chat_id=from_id, text=message_text)
 
 
 @router.message(Command("info"))
