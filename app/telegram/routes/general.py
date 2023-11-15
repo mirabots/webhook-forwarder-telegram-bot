@@ -50,14 +50,10 @@ async def start_channel_handler(event: types.ChatMemberUpdated, bot: Bot):
     if event.chat.type in ("group", "supergroup", "private"):
         return
 
-    owner_name = event.from_user.username
     owner_id = event.from_user.id
     chat_id = event.chat.id
 
-    if (
-        not (await crud_chats.owner_exists(owner_id))
-        or owner_name not in cfg.TELEGRAM_ALLOWED
-    ):
+    if not (await crud_chats.owner_exists(owner_id)):
         return
 
     print(
@@ -112,10 +108,7 @@ async def stop_channel_handler(event: types.ChatMemberUpdated, bot: Bot):
         if from_id == None:
             return
 
-    if (
-        not (await crud_chats.check_ownership(chat_id, from_id))
-        or from_name not in cfg.TELEGRAM_ALLOWED
-    ):
+    if not (await crud_chats.check_ownership(chat_id, from_id)):
         return
 
     print(f"Stop: {from_id=} {from_name=} {chat_id=} {chat_title=} {time.asctime()}")
