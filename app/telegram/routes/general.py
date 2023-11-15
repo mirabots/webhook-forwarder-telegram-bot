@@ -177,6 +177,8 @@ async def abort_handler(
     #     action_text = "Update target"
     if action == "chnla":
         action_text = "Add channel"
+    if action == "chnlr":
+        action_text = "Remove channel"
 
     with suppress(TelegramBadRequest):
         await callback.message.edit_text(
@@ -189,6 +191,7 @@ async def abort_handler(
 @router.message(Command("target_add"))
 @router.message(Command("target_remove"))
 # @router.message(Command("target_update"))
+@router.message(Command("remove_channel"))
 async def chats_handler(message: types.Message, bot: Bot):
     command_text = message.text.rstrip()
 
@@ -197,8 +200,10 @@ async def chats_handler(message: types.Message, bot: Bot):
         action = "tgta"
     if "/target_remove" in command_text:
         action = "tgtr"
-    if "/target_update" in command_text:
-        action = "tgtu"
+    # if "/target_update" in command_text:
+    #     action = "tgtu"
+    if "/remove_channel" in command_text:
+        action = "chnlr"
 
     chats_ids = await crud_chats.get_owned_chats(message.from_user.id)
     chats = [
@@ -288,6 +293,21 @@ async def unsubscribe_streamer_handler(
     with suppress(TelegramBadRequest):
         await callback.message.edit_text(
             text=f"Removed target '{target_name}'", reply_markup=None
+        )
+
+
+@router.callback_query(CallbackChooseChat.filter(F.action == "chnlr"))
+async def remove_channel_handler(
+    callback: types.CallbackQuery, callback_data: CallbackChooseChat, bot: Bot
+):
+    chat_name = get_choosed_callback_text(
+        callback.message.reply_markup.inline_keyboard, callback.data
+    )
+    await bot.leave_chat(callback_data.id)
+
+    with suppress(TelegramBadRequest):
+        await callback.message.edit_text(
+            text=f"'{chat_name}' channel removed", reply_markup=None
         )
 
 

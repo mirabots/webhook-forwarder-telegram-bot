@@ -7,6 +7,7 @@ COMMANDS = [
     types.BotCommand(command="start", description="Start bot"),
     types.BotCommand(command="info", description="Simple info"),
     types.BotCommand(command="add_channel", description="Add bot to channel"),
+    types.BotCommand(command="remove_channel", description="Remove bot from channel"),
     types.BotCommand(command="targets", description="List of channel's targets"),
     types.BotCommand(command="target_add", description="Add target to channel"),
     types.BotCommand(command="target_remove", description="Remove target from channel"),
