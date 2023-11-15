@@ -211,6 +211,9 @@ async def chats_handler(message: types.Message, bot: Bot):
         for chat_id in chats_ids
         if chat_id != message.from_user.id
     ]
+    if not chats:
+        with suppress(TelegramBadRequest):
+            await message.answer(text="No channels")
 
     main_keyboard = get_keyboard_chats(chats, action)
     main_keyboard.adjust(3)
