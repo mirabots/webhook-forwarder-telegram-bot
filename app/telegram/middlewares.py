@@ -68,6 +68,16 @@ class ForwardChannelMiddleware(BaseMiddleware):
         chat_targets = await get_targets(event.chat.id)
         keys_to_remove = [target["key"] for target in chat_targets if target["key"]]
         message_text_edited = str(message_text)
+
+        message_entities = event.entities or event.caption_entities
+        for entity in message_entities:
+            if entity.type == "url":
+                link = message_text[entity.offset, entity.offset + entity.length]
+                if not ("http://" in link or "https://" in link):
+                    message_text_edited = message_text_edited.replace(
+                        link, f"http://{link}"
+                    )
+
         for key in keys_to_remove:
             message_text_edited = message_text_edited.replace(key, "")
         message_text_edited = message_text_edited.lstrip().rstrip()
