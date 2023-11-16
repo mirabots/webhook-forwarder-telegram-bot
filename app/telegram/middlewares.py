@@ -70,14 +70,9 @@ class ForwardChannelMiddleware(BaseMiddleware):
         message_text_edited = str(message_text)
 
         message_entities = event.entities or event.caption_entities
-        print(message_entities)
         for entity in message_entities:
-            print(type(entity.offset))
-            print(type(entity.length))
             if entity.type == "url":
-                link = message_text[
-                    int(entity.offset), int(entity.offset) + int(entity.length)
-                ]
+                link = message_text[entity.offset : (entity.offset + entity.length)]
                 if not ("http://" in link or "https://" in link):
                     message_text_edited = message_text_edited.replace(
                         link, f"http://{link}"
