@@ -70,17 +70,30 @@ class ForwardChannelMiddleware(BaseMiddleware):
         message_text_edited = str(message_text)
 
         message_entities = event.entities or event.caption_entities
+        message_entities = sorted(
+            [entity for entity in message_entities if entity.type == "url"],
+            key=lambda entity: entity.offset,
+        )
+        message_text_edited_fixed_links = ""
+        iterator = 0
         for entity in message_entities:
-            if entity.type == "url":
-                link = message_text[entity.offset : (entity.offset + entity.length)]
-                if not ("http://" in link or "https://" in link):
-                    message_text_edited = message_text_edited.replace(
-                        link, f"http://{link}"
-                    )
+            message_text_edited_fixed_links += message_text[iterator : entity.offset]
+            link = message_text[entity.offset : (entity.offset + entity.length)]
+            if not ("http://" in link or "https://" in link):
+                link = f"http://{link}"
+            message_text_edited_fixed_links += link
+            iterator = entity.offset + entity.length
+        message_text_edited_fixed_links += message_text[iterator:]
 
         for key in keys_to_remove:
             message_text_edited = message_text_edited.replace(key, "")
+            message_text_edited_fixed_links = message_text_edited_fixed_links.replace(
+                key, ""
+            )
         message_text_edited = message_text_edited.lstrip().rstrip()
+        message_text_edited_fixed_links = (
+            message_text_edited_fixed_links.lstrip().rstrip()
+        )
 
         # check if message doesn't have 'payload' (no pics and all text is keys)
         if event.text and message_text_edited == "":
@@ -93,7 +106,7 @@ class ForwardChannelMiddleware(BaseMiddleware):
                     await event.edit_caption(caption=message_text_edited)
 
         data["message_text_original"] = message_text
-        data["message_text_edited"] = message_text_edited
+        data["message_text_edited"] = message_text_edited_fixed_links
         if event.media_group_id == None:
             data["messages_group"] = [event]
             return await handler(event, data)
