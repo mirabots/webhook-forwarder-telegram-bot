@@ -81,11 +81,18 @@ class ForwardChannelMiddleware(BaseMiddleware):
         tasks_list = []
         for entity in message_entities:
             link = message_text[entity.offset : (entity.offset + entity.length)]
-            if not ("http://" in link or "https://" in link):
+            if not link.startswith(("http://", "https://")):
                 tasks_list.append(
                     asyncio.create_task(
                         check_connection(
-                            f"https://{link}", connections_storage, entity.offset
+                            link, "https", connections_storage, entity.offset
+                        )
+                    )
+                )
+                tasks_list.append(
+                    asyncio.create_task(
+                        check_connection(
+                            link, "http", connections_storage, entity.offset
                         )
                     )
                 )
@@ -103,11 +110,10 @@ class ForwardChannelMiddleware(BaseMiddleware):
             message_text_edited_fixed_links += message_text[iterator : entity.offset]
             link = message_text[entity.offset : (entity.offset + entity.length)]
             if not ("http://" in link or "https://" in link):
-                link = (
-                    f"https://{link}"
-                    if connections_storage.get(entity.offset)
-                    else f"http://{link}"
-                )
+                if connections_storage.get(("https", entity.offset)):
+                    link = f"https://{link}"
+                elif connections_storage.get(("http", entity.offset)):
+                    link = f"http://{link}"
             message_text_edited_fixed_links += link
             iterator = entity.offset + entity.length
         message_text_edited_fixed_links += message_text[iterator:]

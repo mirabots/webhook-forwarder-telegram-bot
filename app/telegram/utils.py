@@ -88,12 +88,14 @@ def get_choosed_callback_text(keyboards, callback_data) -> str:
                 return button.text
 
 
-async def check_connection(url: str, storage: dict, url_offset: int) -> None:
+async def check_connection(
+    link: str, protocol: str, storage: dict, url_offset: int
+) -> None:
     try:
         async with httpx.AsyncClient(
             transport=httpx.AsyncHTTPTransport(retries=0)
         ) as ac:
-            await ac.get(url, timeout=5)
-            storage[url_offset] = True
+            await ac.get(f"{protocol}://{link}", timeout=5)
+            storage[(protocol, url_offset)] = True
     except Exception:
         pass
