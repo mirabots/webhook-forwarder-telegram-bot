@@ -69,7 +69,7 @@ class ForwardChannelMiddleware(BaseMiddleware):
         keys_to_remove = [target["key"] for target in chat_targets if target["key"]]
         message_text_edited = str(message_text)
 
-        message_entities = event.entities or event.caption_entities
+        message_entities = event.entities or event.caption_entities or []
         message_entities = sorted(
             [entity for entity in message_entities if entity.type == "url"],
             key=lambda entity: entity.offset,
