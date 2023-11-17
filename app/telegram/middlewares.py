@@ -78,16 +78,18 @@ class ForwardChannelMiddleware(BaseMiddleware):
             key=lambda entity: entity.offset,
         )
         connections_storage = {}
-        tasks_list = [
-            asyncio.create_task(
-                check_connection(
-                    message_text[entity.offset : (entity.offset + entity.length)],
-                    connections_storage,
-                    entity.offset,
+        tasks_list = []
+        for entity in message_entities:
+            link = message_text[entity.offset : (entity.offset + entity.length)]
+            if not ("http://" in link or "https://" in link):
+                tasks_list.append(
+                    asyncio.create_task(
+                        check_connection(
+                            f"https://{link}", connections_storage, entity.offset
+                        )
+                    )
                 )
-            )
-            for entity in message_entities
-        ]
+
         print("__________________________")
         print(f"started at {time.strftime('%X')}")
         if tasks_list:
