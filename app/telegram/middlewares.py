@@ -1,4 +1,5 @@
 import asyncio
+import time
 from contextlib import suppress
 from typing import Any, Awaitable, Callable, Dict
 
@@ -8,6 +9,8 @@ from cachetools import TTLCache
 from common.config import cfg
 from crud.chats import chat_exists, owner_exists
 from crud.targets import get_targets
+
+from .utils import check_connection
 
 
 class AuthChatMiddleware(BaseMiddleware):
@@ -50,8 +53,8 @@ class AuthChannelMiddleware(BaseMiddleware):
 class ForwardChannelMiddleware(BaseMiddleware):
     def __init__(self):
         super().__init__()
-        self.delay = 5
-        self.media_group_cache = TTLCache(ttl=10.0, maxsize=1000.0)
+        self.delay = 10
+        self.media_group_cache = TTLCache(ttl=25.0, maxsize=1000.0)
         self.lock = asyncio.Lock()
 
     async def __call__(
@@ -74,13 +77,35 @@ class ForwardChannelMiddleware(BaseMiddleware):
             [entity for entity in message_entities if entity.type == "url"],
             key=lambda entity: entity.offset,
         )
+        connections_storage = {}
+        tasks_list = [
+            asyncio.create_task(
+                check_connection(
+                    message_text[entity.offset : (entity.offset + entity.length)],
+                    connections_storage,
+                    entity.offset,
+                )
+            )
+            for entity in message_entities
+        ]
+        print("__________________________")
+        print(f"started at {time.strftime('%X')}")
+        if tasks_list:
+            await asyncio.gather(*tasks_list)
+        print(f"finished at {time.strftime('%X')}")
+        print(connections_storage)
+
         message_text_edited_fixed_links = ""
         iterator = 0
         for entity in message_entities:
             message_text_edited_fixed_links += message_text[iterator : entity.offset]
             link = message_text[entity.offset : (entity.offset + entity.length)]
             if not ("http://" in link or "https://" in link):
-                link = f"http://{link}"
+                link = (
+                    f"https://{link}"
+                    if connections_storage.get(entity.offset)
+                    else f"http://{link}"
+                )
             message_text_edited_fixed_links += link
             iterator = entity.offset + entity.length
         message_text_edited_fixed_links += message_text[iterator:]

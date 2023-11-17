@@ -1,3 +1,4 @@
+import httpx
 from aiogram import types
 from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.state import State, StatesGroup
@@ -85,3 +86,14 @@ def get_choosed_callback_text(keyboards, callback_data) -> str:
         for button in keyboard:
             if button.callback_data == callback_data:
                 return button.text
+
+
+async def check_connection(url: str, storage: dict, url_offset: int) -> None:
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.AsyncHTTPTransport(retries=0)
+        ) as ac:
+            await ac.get(url, timeout=5)
+            storage[url_offset] = True
+    except Exception:
+        pass
