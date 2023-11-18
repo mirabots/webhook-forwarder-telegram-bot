@@ -109,11 +109,14 @@ class ForwardChannelMiddleware(BaseMiddleware):
         for entity in message_entities:
             message_text_edited_fixed_links += message_text[iterator : entity.offset]
             link = message_text[entity.offset : (entity.offset + entity.length)]
-            if not ("http://" in link or "https://" in link):
+            if not link.startswith(("http://", "https://")):
                 if connections_storage.get(("https", entity.offset)):
                     link = f"https://{link}"
                 elif connections_storage.get(("http", entity.offset)):
                     link = f"http://{link}"
+            if link.startswith(("http://", "https://")):
+                link = f"<{link}>"
+
             message_text_edited_fixed_links += link
             iterator = entity.offset + entity.length
         message_text_edited_fixed_links += message_text[iterator:]
