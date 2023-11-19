@@ -52,8 +52,8 @@ class AuthChannelMiddleware(BaseMiddleware):
 class ForwardChannelMiddleware(BaseMiddleware):
     def __init__(self):
         super().__init__()
-        self.delay = 10
-        self.media_group_cache = TTLCache(ttl=25.0, maxsize=1000.0)
+        self.delay = 15
+        self.media_group_cache = TTLCache(ttl=40.0, maxsize=1000.0)
         self.lock = asyncio.Lock()
 
     async def __call__(
