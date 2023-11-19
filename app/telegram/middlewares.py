@@ -1,5 +1,4 @@
 import asyncio
-import time
 from contextlib import suppress
 from typing import Any, Awaitable, Callable, Dict
 
@@ -96,13 +95,8 @@ class ForwardChannelMiddleware(BaseMiddleware):
                         )
                     )
                 )
-
-        print("__________________________")
-        print(f"started at {time.strftime('%X')}")
         if tasks_list:
             await asyncio.gather(*tasks_list)
-        print(f"finished at {time.strftime('%X')}")
-        print(connections_storage)
 
         message_text_edited_fixed_links = ""
         iterator = 0
