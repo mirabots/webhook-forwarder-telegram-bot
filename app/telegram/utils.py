@@ -1,3 +1,4 @@
+import httpx
 from aiogram import types
 from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.state import State, StatesGroup
@@ -7,6 +8,7 @@ COMMANDS = [
     types.BotCommand(command="start", description="Start bot"),
     types.BotCommand(command="info", description="Simple info"),
     types.BotCommand(command="add_channel", description="Add bot to channel"),
+    types.BotCommand(command="remove_channel", description="Remove bot from channel"),
     types.BotCommand(command="targets", description="List of channel's targets"),
     types.BotCommand(command="target_add", description="Add target to channel"),
     types.BotCommand(command="target_remove", description="Remove target from channel"),
@@ -84,3 +86,16 @@ def get_choosed_callback_text(keyboards, callback_data) -> str:
         for button in keyboard:
             if button.callback_data == callback_data:
                 return button.text
+
+
+async def check_connection(
+    link: str, protocol: str, storage: dict, url_offset: int
+) -> None:
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.AsyncHTTPTransport(retries=0)
+        ) as ac:
+            await ac.get(f"{protocol}://{link}", timeout=5)
+            storage[(protocol, url_offset)] = True
+    except Exception:
+        pass

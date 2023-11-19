@@ -1,0 +1,64 @@
+name: Start app
+run-name: Start app at ${{ inputs.target }} env with ${{ inputs.docker_port }} port
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Environment for deployment"
+        required: true
+        default: 'test'
+        type: choice
+        options:
+          - test
+          - prod
+      docker_port:
+        description: "Port for running docker"
+        default: '8811'
+
+env:
+  DOCKER_REGISTRY: ghcr.io
+
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    name: Start app
+    steps:
+      - name: Lower case image name
+        id: define_image_names
+        env:
+          FULL_REPO: ${{ github.repository }}
+          REPO: ${{ github.event.repository.name }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          echo "FULL_IMAGE_NAME=${FULL_REPO,,}/${TARGET}" >>${GITHUB_OUTPUT}
+      - name: Start
+        uses: appleboy/ssh-action@v1.0.0
+        env:
+          B_ENV: ${{ inputs.target }}
+          WFTB_DEPLOY_FULL_IMAGE_NAME: ${{ steps.define_image_names.outputs.FULL_IMAGE_NAME }}
+          WFTB_DEPLOY_PAT_GH: ${{ secrets.PAT_GH }}
+          WFTB_DEPLOY_GH_LOGIN: ${{ github.actor }}
+          WFTB_DEPLOY_DOCKER_PORT: ${{ inputs.docker_port }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          port: ${{ secrets.SSH_PORT }}
+          script_stop: true
+          script: |
+            docker login ${{ env.DOCKER_REGISTRY }} -u ${{ env.WFTB_DEPLOY_GH_LOGIN }} -p ${{ env.WFTB_DEPLOY_PAT_GH }}
+            echo "-------- Try to stop wftb-${{ env.B_ENV }} container"
+            docker stop wftb-${{ env.B_ENV }} || true
+            echo "-------- Try to run ${{ env.WFTB_DEPLOY_FULL_IMAGE_NAME }} image"
+            docker run -d \
+              -it \
+              --name wftb-${{ env.B_ENV }} \
+              --network=host \
+              -e APP_HOST=127.0.0.1 \
+              -e APP_PORT=${{ env.WFTB_DEPLOY_DOCKER_PORT }} \
+              -e APP_ENV=${{ env.B_ENV }} \
+              --mount type=bind,source=/home/${{ env.WFTB_DEPLOY_GH_LOGIN }}/deploy_configs/wftb-${{ env.B_ENV }}/config.yaml,target=/application/config/config.yaml \
+              ${{ env.DOCKER_REGISTRY }}/${{ env.WFTB_DEPLOY_FULL_IMAGE_NAME }}:latest
+            docker logout "${{ env.DOCKER_REGISTRY }}"

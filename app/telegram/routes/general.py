@@ -50,14 +50,10 @@ async def start_channel_handler(event: types.ChatMemberUpdated, bot: Bot):
     if event.chat.type in ("group", "supergroup", "private"):
         return
 
-    owner_name = event.from_user.username
     owner_id = event.from_user.id
     chat_id = event.chat.id
 
-    if (
-        not (await crud_chats.owner_exists(owner_id))
-        or owner_name not in cfg.TELEGRAM_ALLOWED
-    ):
+    if not (await crud_chats.owner_exists(owner_id)):
         return
 
     print(
@@ -101,23 +97,25 @@ async def stop_channel_handler(event: types.ChatMemberUpdated, bot: Bot):
     if event.chat.type in ("group", "supergroup", "private"):
         return
 
-    owner_name = event.from_user.username
-    owner_id = event.from_user.id
+    from_id = event.from_user.id
+    from_name = event.from_user.username
     chat_id = event.chat.id
+    chat_title = event.chat.title
+    bot_id = (await bot.get_me()).id
 
-    if (
-        not (await crud_chats.owner_exists(owner_id))
-        or owner_name not in cfg.TELEGRAM_ALLOWED
-    ):
+    if from_id == bot_id:
+        from_id = await crud_chats.get_owner(chat_id)
+        if from_id == None:
+            return
+
+    if not (await crud_chats.check_ownership(chat_id, from_id)):
         return
 
-    print(
-        f"Stop: {owner_id=} {event.from_user.username=} {chat_id=} {event.chat.title=} {time.asctime()}"
-    )
+    print(f"Stop: {from_id=} {from_name=} {chat_id=} {chat_title=} {time.asctime()}")
 
     await crud_chats.remove_chats([chat_id])
-    message_text = f"Notification\nBot leaved from channel '{event.chat.title}'"
-    await bot.send_message(chat_id=owner_id, text=message_text)
+    message_text = f"Notification\nBot leaved from channel '{chat_title}'"
+    await bot.send_message(chat_id=from_id, text=message_text)
 
 
 @router.message(Command("info"))
@@ -177,6 +175,8 @@ async def abort_handler(
     #     action_text = "Update target"
     if action == "chnla":
         action_text = "Add channel"
+    if action == "chnlr":
+        action_text = "Remove channel"
 
     with suppress(TelegramBadRequest):
         await callback.message.edit_text(
@@ -189,6 +189,7 @@ async def abort_handler(
 @router.message(Command("target_add"))
 @router.message(Command("target_remove"))
 # @router.message(Command("target_update"))
+@router.message(Command("remove_channel"))
 async def chats_handler(message: types.Message, bot: Bot):
     command_text = message.text.rstrip()
 
@@ -197,8 +198,10 @@ async def chats_handler(message: types.Message, bot: Bot):
         action = "tgta"
     if "/target_remove" in command_text:
         action = "tgtr"
-    if "/target_update" in command_text:
-        action = "tgtu"
+    # if "/target_update" in command_text:
+    #     action = "tgtu"
+    if "/remove_channel" in command_text:
+        action = "chnlr"
 
     chats_ids = await crud_chats.get_owned_chats(message.from_user.id)
     chats = [
@@ -206,6 +209,10 @@ async def chats_handler(message: types.Message, bot: Bot):
         for chat_id in chats_ids
         if chat_id != message.from_user.id
     ]
+    if not chats:
+        with suppress(TelegramBadRequest):
+            await message.answer(text="No channels")
+        return
 
     main_keyboard = get_keyboard_chats(chats, action)
     main_keyboard.adjust(3)
@@ -288,6 +295,21 @@ async def unsubscribe_streamer_handler(
     with suppress(TelegramBadRequest):
         await callback.message.edit_text(
             text=f"Removed target '{target_name}'", reply_markup=None
+        )
+
+
+@router.callback_query(CallbackChooseChat.filter(F.action == "chnlr"))
+async def remove_channel_handler(
+    callback: types.CallbackQuery, callback_data: CallbackChooseChat, bot: Bot
+):
+    chat_name = get_choosed_callback_text(
+        callback.message.reply_markup.inline_keyboard, callback.data
+    )
+    await bot.leave_chat(callback_data.id)
+
+    with suppress(TelegramBadRequest):
+        await callback.message.edit_text(
+            text=f"'{chat_name}' channel removed", reply_markup=None
         )
 
 
