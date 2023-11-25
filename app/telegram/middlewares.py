@@ -87,6 +87,9 @@ class ForwardChannelMiddleware(BaseMiddleware):
             entity.offset = len(prefix_utf_16)
             fixed_message_entities.append(entity)
 
+        print(message_entities)
+        print(fixed_message_entities)
+
         connections_storage = {}
         tasks_list = []
         for entity in fixed_message_entities:
