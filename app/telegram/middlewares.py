@@ -76,9 +76,20 @@ class ForwardChannelMiddleware(BaseMiddleware):
             [entity for entity in message_entities if entity.type == "url"],
             key=lambda entity: entity.offset,
         )
+        # python get messages in utf-8, but telegram calculates offsets in utf-16, so
+        # if message contains emojis, offsets will be shifted relative to utf-8
+        fixed_message_entities = []
+        message_text_utf_16 = message_text.encode("utf-16-le")
+        for entity in message_entities:
+            prefix_utf_16 = message_text_utf_16[: (entity.offset * 2)].decode(
+                "utf-16-le"
+            )
+            entity.offset = len(prefix_utf_16)
+            fixed_message_entities.append(entity)
+
         connections_storage = {}
         tasks_list = []
-        for entity in message_entities:
+        for entity in fixed_message_entities:
             link = message_text[entity.offset : (entity.offset + entity.length)]
             if not link.startswith(("http://", "https://")):
                 tasks_list.append(
@@ -100,7 +111,7 @@ class ForwardChannelMiddleware(BaseMiddleware):
 
         message_text_edited_fixed_links = ""
         iterator = 0
-        for entity in message_entities:
+        for entity in fixed_message_entities:
             message_text_edited_fixed_links += message_text[iterator : entity.offset]
             link = message_text[entity.offset : (entity.offset + entity.length)]
             if not link.startswith(("http://", "https://")):

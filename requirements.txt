@@ -2,6 +2,7 @@ aiofile
 aiogram[i18n]
 asyncpg
 cachetools
+emoji
 fastapi
 httpx
 psycopg2-binary
