@@ -50,21 +50,33 @@ async def start_channel_handler(event: types.ChatMemberUpdated, bot: Bot):
     if event.chat.type in ("group", "supergroup", "private"):
         return
 
-    owner_id = event.from_user.id
+    user_id = event.from_user.id
     chat_id = event.chat.id
+    user_membership = await bot.get_chat_member(chat_id, user_id)
+    if user_membership.status != "creator":
+        print(
+            f"Start NOT OWNER: {user_id=} {event.from_user.username=} {chat_id=} {event.chat.title=} {time.asctime()}"
+        )
+        await bot.leave_chat(chat_id)
+        message_text = (
+            f"Notification\nCan't add channel '{event.chat.title}' - you are not owner"
+        )
+        with suppress(TelegramBadRequest):
+            await bot.send_message(chat_id=user_id, text=message_text)
+        return
 
-    if not (await crud_chats.owner_exists(owner_id)):
+    if not (await crud_chats.owner_exists(user_id)):
         return
 
     print(
-        f"Start: {owner_id=} {event.from_user.username=} {chat_id=} {event.chat.title=} {time.asctime()}"
+        f"Start: {user_id=} {event.from_user.username=} {chat_id=} {event.chat.title=} {time.asctime()}"
     )
 
-    chat_added = await crud_chats.add_chat(chat_id, owner_id)
+    chat_added = await crud_chats.add_chat(chat_id, user_id)
     if chat_added:
         message_text = f"Notification\nChannel '{event.chat.title}' added"
         with suppress(TelegramBadRequest):
-            await bot.send_message(chat_id=owner_id, text=message_text)
+            await bot.send_message(chat_id=user_id, text=message_text)
 
 
 @router.message(Command("stop"))
