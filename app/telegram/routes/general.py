@@ -50,6 +50,16 @@ async def start_channel_handler(event: types.ChatMemberUpdated, bot: Bot):
     if event.chat.type in ("group", "supergroup", "private"):
         return
 
+    channel_info = await bot.get_chat(event.chat.id)
+    print(channel_info)
+    print()
+    admins_info = await bot.get_chat_administrators(event.chat.id)
+    print(admins_info)
+    print()
+    my_info = await bot.get_chat_member(event.chat.id, event.from_user.id)
+    print(my_info)
+    print()
+
     owner_id = event.from_user.id
     chat_id = event.chat.id
 
