@@ -324,13 +324,13 @@ async def channel_post_handler(
     owner_id = await crud_chats.get_owner(channel_post.chat.id)
     pictures = {}
     counter = 1
-    post: types.Message
-    for post in messages_group:
-        if post.photo:
+    message: types.Message
+    for message in sorted(messages_group, key=lambda msg: msg.message_id):
+        if message.photo:
             orig_photo = types.PhotoSize(
                 file_id="0", file_unique_id="0", width=0, height=0, file_size=0
             )
-            for photo in post.photo:
+            for photo in message.photo:
                 if photo.file_size > orig_photo.file_size:
                     orig_photo = photo
 
