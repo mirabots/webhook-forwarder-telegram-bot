@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+from contextlib import asynccontextmanager
 
 parser = ArgumentParser(description="Webhook Forwarder Telegram Bot")
 parser.add_argument(
@@ -14,7 +15,7 @@ parser.add_argument(
     "-P",
     action="store",
     dest="port",
-    default="8810",
+    default="8880",
     help="Port",
 )
 parser.add_argument(
@@ -49,31 +50,24 @@ from telegram.middlewares import (
 from telegram.routes.routers import router
 from telegram.utils import COMMANDS
 
-FastAPP = FastAPI(
-    title="",
-    version="",
-    exception_handlers=exception_handlers,
-    openapi_url=None,
-    docs_url=None,
-    redoc_url=None,
-)
 bot = Bot(token=cfg.TELEGRAM_TOKEN)
 dp = Dispatcher()
 
 
-@FastAPP.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan_function(FastAPP: FastAPI):
     print(f"INFO:\t  {args.env} running {args.host}:{args.port}")
     print()
 
     await check_db()
 
-    webhook_info = await bot.get_webhook_info()
-    if webhook_info.url != f"https://{cfg.DOMAIN}/webhooks/telegram":
-        await bot.set_webhook(
-            url=f"https://{cfg.DOMAIN}/webhooks/telegram",
-            secret_token=cfg.TELEGRAM_SECRET,
-        )
+    # webhook_info = await bot.get_webhook_info()
+    # if webhook_info.url != f"https://{cfg.DOMAIN}/webhooks/telegram":
+    await bot.set_webhook(
+        url=f"https://{cfg.DOMAIN}/webhooks/telegram",
+        secret_token=cfg.TELEGRAM_SECRET,
+        drop_pending_updates=True if args.env == "dev" else False,
+    )
 
     dp.include_router(router)
     dp.message.middleware(AuthChatMiddleware())
@@ -89,19 +83,29 @@ async def startup():
                 chat_id=cfg.OWNER_ID, text="ADMIN MESSAGE\nBOT STARTED"
             )
 
+    yield
 
-@FastAPP.on_event("shutdown")
-async def shutdown():
     await _engine.dispose()
     await bot.session.close()
+
+
+FastAPP = FastAPI(
+    lifespan=lifespan_function,
+    title="",
+    version="",
+    exception_handlers=exception_handlers,
+    openapi_url=None,
+    docs_url=None,
+    redoc_url=None,
+)
 
 
 @FastAPP.post("/webhooks/telegram", dependencies=[Depends(verify_telegram_secret)])
 async def webhook_telegram(update: dict, background_tasks: BackgroundTasks):
     print(update)
     telegram_update = types.Update(**update)
-    if update.get("channel_post", {}).get("media_group_id"):
-        background_tasks.add_task(dp.feed_webhook_update, bot, update)
+    if update.get("channel_post"):
+        background_tasks.add_task(dp.feed_webhook_update, bot, telegram_update)
     else:
         await dp.feed_webhook_update(bot=bot, update=telegram_update)
 
