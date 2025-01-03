@@ -369,7 +369,9 @@ async def channel_post_handler(
                                 chat_id=owner_id,
                                 text=f"Channel message wasn't forwarded - {answer.status_code}",
                             )
-                except Exception:
+                except Exception as e:
+                    print(type(e))
+                    print(str(e))
                     if owner_id:
                         await bot.send_message(
                             chat_id=owner_id, text="Channel message wasn't forwarded"

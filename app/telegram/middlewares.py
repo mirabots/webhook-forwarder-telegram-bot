@@ -111,16 +111,42 @@ class ForwardChannelMiddleware(BaseMiddleware):
 
         message_text_edited_fixed_links = ""
         iterator = 0
+
+        link_preview = None
+        if event.link_preview_options:
+            if event.link_preview_options.url:
+                link_preview = event.link_preview_options.url
+            elif (
+                not hasattr(event.link_preview_options, "is_disabled")
+                or event.link_preview_options.is_disabled != True
+                and "link_preview_is_disabled"
+                not in str(event.link_preview_options.is_disabled)
+            ):
+                if fixed_message_entities:
+                    entity = fixed_message_entities[0]
+                    link_preview = message_text[
+                        entity.offset : (entity.offset + entity.length)
+                    ]
+
         for entity in fixed_message_entities:
             message_text_edited_fixed_links += message_text[iterator : entity.offset]
             link = message_text[entity.offset : (entity.offset + entity.length)]
+            link_original = (
+                message_text[entity.offset : (entity.offset + entity.length)]
+                .removeprefix("http://")
+                .removeprefix("https://")
+                .removeprefix("www.")
+            )
             if not link.startswith(("http://", "https://")):
                 if connections_storage.get(("https", entity.offset)):
                     link = f"https://{link}"
                 elif connections_storage.get(("http", entity.offset)):
                     link = f"http://{link}"
             if link.startswith(("http://", "https://")):
-                link = f"<{link}>"
+                if link_preview and link_original in link_preview:
+                    pass
+                else:
+                    link = f"<{link}>"
 
             message_text_edited_fixed_links += link
             iterator = entity.offset + entity.length
@@ -142,7 +168,10 @@ class ForwardChannelMiddleware(BaseMiddleware):
         if message_text_edited != message_text:
             with suppress(TelegramBadRequest):
                 if event.text:
-                    await event.edit_text(text=message_text_edited)
+                    await event.edit_text(
+                        text=message_text_edited,
+                        link_preview_options=event.link_preview_options,
+                    )
                 if event.caption:
                     await event.edit_caption(caption=message_text_edited)
 
