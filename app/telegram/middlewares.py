@@ -69,6 +69,14 @@ class ForwardChannelMiddleware(BaseMiddleware):
 
         chat_targets = await get_targets(event.chat.id)
         keys_to_remove = [target["key"] for target in chat_targets if target["key"]]
+        always_link_preview = any(
+            [
+                target["always_link_preview"]
+                for target in chat_targets
+                if not target["key"] or target["key"] in message_text
+            ]
+        )
+
         message_text_edited = str(message_text)
 
         message_entities = event.entities or event.caption_entities or []
@@ -113,20 +121,21 @@ class ForwardChannelMiddleware(BaseMiddleware):
         iterator = 0
 
         link_preview = None
-        if event.link_preview_options:
-            if event.link_preview_options.url:
-                link_preview = event.link_preview_options.url
-            elif (
-                not hasattr(event.link_preview_options, "is_disabled")
-                or event.link_preview_options.is_disabled != True
-                and "link_preview_is_disabled"
-                not in str(event.link_preview_options.is_disabled)
-            ):
-                if fixed_message_entities:
-                    entity = fixed_message_entities[0]
-                    link_preview = message_text[
-                        entity.offset : (entity.offset + entity.length)
-                    ]
+        forced_link_preview = None
+        if getattr(event.link_preview_options, "url", None):
+            link_preview = event.link_preview_options.url
+        elif (
+            always_link_preview
+            or not hasattr(event.link_preview_options, "is_disabled")
+            or event.link_preview_options.is_disabled != True
+            and "link_preview_is_disabled"
+            not in str(event.link_preview_options.is_disabled)
+        ):
+            if fixed_message_entities:
+                entity = fixed_message_entities[0]
+                link_preview = message_text[
+                    entity.offset : (entity.offset + entity.length)
+                ]
 
         for entity in fixed_message_entities:
             message_text_edited_fixed_links += message_text[iterator : entity.offset]
@@ -144,7 +153,7 @@ class ForwardChannelMiddleware(BaseMiddleware):
                     link = f"http://{link}"
             if link.startswith(("http://", "https://")):
                 if link_preview and link_original in link_preview:
-                    pass
+                    forced_link_preview = str(link)
                 else:
                     link = f"<{link}>"
 
@@ -165,12 +174,35 @@ class ForwardChannelMiddleware(BaseMiddleware):
         # check if message doesn't have 'payload' (no pics and all text is keys)
         if event.text and message_text_edited == "":
             return
+
+        if (
+            message_text_edited == message_text
+            and not getattr(event.link_preview_options, "url", None)
+            and forced_link_preview
+            and event.text
+        ):
+            with suppress(TelegramBadRequest):
+                await event.edit_text(
+                    text=message_text,
+                    link_preview_options=types.LinkPreviewOptions(
+                        url=forced_link_preview
+                    ),
+                )
         if message_text_edited != message_text:
             with suppress(TelegramBadRequest):
                 if event.text:
+                    link_preview_options = event.link_preview_options
+                    if (
+                        not getattr(event.link_preview_options, "url", None)
+                        and forced_link_preview
+                    ):
+                        link_preview_options = types.LinkPreviewOptions(
+                            url=forced_link_preview
+                        )
+
                     await event.edit_text(
                         text=message_text_edited,
-                        link_preview_options=event.link_preview_options,
+                        link_preview_options=link_preview_options,
                     )
                 if event.caption:
                     await event.edit_caption(caption=message_text_edited)

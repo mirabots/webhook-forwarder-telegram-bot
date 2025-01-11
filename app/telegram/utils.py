@@ -1,3 +1,5 @@
+from typing import Any
+
 import httpx
 from aiogram import types
 from aiogram.filters.callback_data import CallbackData
@@ -30,6 +32,11 @@ class CallbackChooseTarget(CallbackData, prefix="target"):
     action: str
     target_id: int
     chat_id: int
+
+
+class CallbackChooseAction(CallbackData, prefix="trgta"):
+    action: str
+    value_id: int
 
 
 class CallbackEmpty(CallbackData, prefix="empty"):
@@ -68,6 +75,19 @@ def get_keyboard_targets(
     return keyboard
 
 
+def get_keyboard_action(action, values: list[Any]) -> InlineKeyboardBuilder:
+    keyboard = InlineKeyboardBuilder()
+    for id, value in enumerate(values):
+        keyboard.button(
+            text=value,
+            callback_data=CallbackChooseAction(
+                action=action,
+                value_id=id,
+            ),
+        )
+    return keyboard
+
+
 def get_keyboard_empty(action: str, name: str) -> InlineKeyboardBuilder:
     keyboard = InlineKeyboardBuilder()
     keyboard.button(text=name, callback_data=CallbackEmpty(action=action))
@@ -79,6 +99,7 @@ class FormTargetAdd(StatesGroup):
     name = State()
     key = State()
     prefix = State()
+    always_link_preview = State()
 
 
 def get_choosed_callback_text(keyboards, callback_data) -> str:
