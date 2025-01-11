@@ -246,9 +246,8 @@ async def targets_handler(
                 webhook = target["webhook"]
                 key = target["key"]
                 prefix = target["prefix"]
-                message_text += (
-                    f"\n● {name}\n○ {webhook}\n○ key: {key}\n○ prefix: {prefix}"
-                )
+                always_link_preview = target["always_link_preview"]
+                message_text += f"\n● {name}\n○ {webhook}\n○ key: {key}\n○ prefix: {prefix}\n○ always link preview: {always_link_preview}"
         await callback.message.answer(
             text=message_text, reply_markup=None, disable_web_page_preview=True
         )
@@ -354,7 +353,7 @@ async def channel_post_handler(
 
             message_text_to_send = str(message_text_edited)
             if prefix:
-                message_text_to_send = f"{prefix} {message_text_to_send}"
+                message_text_to_send = f"{prefix}\n{message_text_to_send}"
             json = {"content": message_text_to_send}
 
             if not key or key in message_text_original:
