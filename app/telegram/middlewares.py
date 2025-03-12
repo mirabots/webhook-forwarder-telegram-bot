@@ -184,6 +184,7 @@ class ForwardChannelMiddleware(BaseMiddleware):
             with suppress(TelegramBadRequest):
                 await event.edit_text(
                     text=message_text,
+                    entities=event.entities,
                     link_preview_options=types.LinkPreviewOptions(
                         url=forced_link_preview
                     ),
@@ -202,10 +203,14 @@ class ForwardChannelMiddleware(BaseMiddleware):
 
                     await event.edit_text(
                         text=message_text_edited,
+                        entities=event.entities,
                         link_preview_options=link_preview_options,
                     )
                 if event.caption:
-                    await event.edit_caption(caption=message_text_edited)
+                    await event.edit_caption(
+                        caption=message_text_edited,
+                        caption_entities=event.caption_entities,
+                    )
 
         data["message_text_original"] = message_text
         data["message_text_edited"] = message_text_edited_fixed_links
