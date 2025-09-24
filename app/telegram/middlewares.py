@@ -201,7 +201,7 @@ class ForwardChannelMiddleware(BaseMiddleware):
                         link_preview_options = types.LinkPreviewOptions(
                             url=forced_link_preview
                         )
-                    if always_link_preview:
+                    if link_preview_options and always_link_preview:
                         link_preview_options.is_disabled = False
                     await event.edit_text(
                         text=message_text_edited,
