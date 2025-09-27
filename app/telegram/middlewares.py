@@ -186,7 +186,7 @@ class ForwardChannelMiddleware(BaseMiddleware):
                     text=message_text,
                     entities=event.entities,
                     link_preview_options=types.LinkPreviewOptions(
-                        url=forced_link_preview
+                        url=forced_link_preview, is_disabled=False
                     ),
                 )
         if message_text_edited != message_text:
@@ -194,13 +194,20 @@ class ForwardChannelMiddleware(BaseMiddleware):
                 if event.text:
                     link_preview_options = event.link_preview_options
                     if (
+                        link_preview_options
+                        and getattr(event.link_preview_options, "url", None)
+                        and always_link_preview
+                    ):
+                        link_preview_options = types.LinkPreviewOptions(
+                            url=event.link_preview_options.url, is_disabled=False
+                        )
+                    if (
                         not getattr(event.link_preview_options, "url", None)
                         and forced_link_preview
                     ):
                         link_preview_options = types.LinkPreviewOptions(
-                            url=forced_link_preview
+                            url=forced_link_preview, is_disabled=False
                         )
-
                     await event.edit_text(
                         text=message_text_edited,
                         entities=event.entities,
