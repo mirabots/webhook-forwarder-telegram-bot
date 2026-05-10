@@ -346,7 +346,10 @@ async def channel_post_handler(
                 file_id="0", file_unique_id="0", width=0, height=0, file_size=0
             )
             for photo in message.photo:
-                if photo.file_size > orig_photo.file_size:
+                if (
+                    photo.file_size > orig_photo.file_size
+                    and photo.file_size < 7 * 1000 * 1000
+                ):
                     orig_photo = photo
 
             orig_photo_bytes = await bot.download(orig_photo)
