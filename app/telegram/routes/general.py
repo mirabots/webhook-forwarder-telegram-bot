@@ -1,3 +1,4 @@
+import asyncio
 import time
 from contextlib import suppress
 
@@ -15,6 +16,7 @@ from ..utils import (
     CallbackAbort,
     CallbackChooseChat,
     CallbackChooseTarget,
+    check_connection,
     get_choosed_callback_text,
     get_keyboard_abort,
     get_keyboard_chats,
@@ -246,8 +248,9 @@ async def targets_handler(
                 webhook = target["webhook"]
                 key = target["key"]
                 prefix = target["prefix"]
-                always_link_preview = target["always_link_preview"]
-                message_text += f"\n● {name}\n○ {webhook}\n○ key: {key}\n○ prefix: {prefix}\n○ always link preview: {always_link_preview}"
+                message_text += (
+                    f"\n● {name}\n○ {webhook}\n○ key: {key}\n○ prefix: {prefix}"
+                )
         await callback.message.answer(
             text=message_text, reply_markup=None, disable_web_page_preview=True
         )
@@ -316,11 +319,24 @@ async def remove_channel_handler(
 async def channel_post_handler(
     channel_post: types.Message,
     bot: Bot,
-    message_text_original: str,
-    message_text_edited: str,
-    messages_group,
+    messages_group: list[types.Message],
 ):
-    owner_id = await crud_chats.get_owner(channel_post.chat.id)
+    message_text = (channel_post.text or channel_post.caption or "").strip()
+    chat_targets = await crud_targets.get_targets(channel_post.chat.id)
+    message_text_without_keys = str(message_text)
+    for target in chat_targets:
+        if target["key"]:
+            message_text_without_keys = message_text_without_keys.replace(
+                target["key"], ""
+            )
+    message_text_without_keys = message_text_without_keys.strip()
+
+    if not any([(target["key"] or "") in message_text for target in chat_targets]) or (
+        channel_post.text and not message_text_without_keys
+    ):
+        return
+
+    # get pictures
     pictures = {}
     counter = 1
     message: types.Message
@@ -335,28 +351,179 @@ async def channel_post_handler(
 
             orig_photo_bytes = await bot.download(orig_photo)
             pictures[f"file{counter}"] = (
-                f"file{counter}.jpg",
+                ("SPOILER_" if message.has_media_spoiler else "")
+                + f"file{counter}.jpg",
                 orig_photo_bytes,
                 "image/jpeg",
             )
             counter += 1
 
-    if not message_text_original and not pictures:
+    if not message_text and not pictures:
         return
 
+    # create forwarded text
+    supported_entities_types = (
+        "url",
+        "text_link",
+        "bold",
+        "italic",
+        "underline",
+        "strikethrough",
+        "spoiler",
+        "code",
+    )
+    message_entities = channel_post.entities or channel_post.caption_entities or []
+    message_entities = sorted(
+        [
+            entity
+            for entity in message_entities
+            if entity.type in supported_entities_types
+        ],
+        key=lambda entity: entity.offset,
+    )
+    # python get messages in utf-8, but telegram calculates offsets in utf-16, so
+    # if message contains emojis, offsets will be shifted relative to utf-8
+    fixed_message_entities: list[types.MessageEntity] = []
+    message_text_utf_16 = message_text.encode("utf-16-le")
+    for entity in message_entities:
+        prefix_utf_16 = message_text_utf_16[: (entity.offset * 2)].decode("utf-16-le")
+        entity.offset = len(prefix_utf_16)
+        fixed_message_entities.append(entity)
+
+    connections_storage = {}
+    tasks_list = []
+    for entity in fixed_message_entities:
+        if entity.type not in ("url", "text_link"):
+            continue
+        link = (
+            message_text[entity.offset : (entity.offset + entity.length)]
+            if entity.type == "url"
+            else entity.url
+        )
+        if not link.startswith(("http://", "https://")):
+            tasks_list.append(
+                asyncio.create_task(
+                    check_connection(link, "https", connections_storage, entity.offset)
+                )
+            )
+            tasks_list.append(
+                asyncio.create_task(
+                    check_connection(link, "http", connections_storage, entity.offset)
+                )
+            )
+    if tasks_list:
+        await asyncio.gather(*tasks_list)
+
+    # find link preview
+    link_preview_pure: str | None = None
+    if len(messages_group) == 1:
+        if getattr(channel_post.link_preview_options, "is_disabled", False) != True:
+            link = getattr(channel_post.link_preview_options, "url", None)
+            # entities_links = [entity for entity in fixed_message_entities if entity.type in ("url", "text_link")]
+            # if not link and entities_links:
+            #     first_entity_link = entities_links[0]
+            #     link = message_text[first_entity_link.offset : (first_entity_link.offset + first_entity_link.length)] if first_entity_link.type == "url" else first_entity_link.url
+            if link:
+                link_preview_pure = (
+                    link.removeprefix("http://")
+                    .removeprefix("https://")
+                    .removeprefix("www.")
+                )
+
+    message_text_discord = ""
+    iterator = 0
+    for entity in fixed_message_entities:
+        message_text_discord += message_text[iterator : entity.offset]
+        content = ""
+
+        match entity.type:
+            case "url":
+                link = message_text[entity.offset : (entity.offset + entity.length)]
+                link_pure = (
+                    link.removeprefix("http://")
+                    .removeprefix("https://")
+                    .removeprefix("www.")
+                )
+
+                if not link.startswith(("http://", "https://")):
+                    if connections_storage.get(("https", entity.offset)):
+                        link = f"https://{link}"
+                    elif connections_storage.get(("http", entity.offset)):
+                        link = f"http://{link}"
+                if link.startswith(("http://", "https://")):
+                    if link_preview_pure == link_pure:
+                        content = str(link)
+                    else:
+                        content = f"<{link}>"
+            case "text_link":
+                name = message_text[entity.offset : (entity.offset + entity.length)]
+                link = entity.url
+                link_pure = (
+                    link.removeprefix("http://")
+                    .removeprefix("https://")
+                    .removeprefix("www.")
+                )
+
+                if not link.startswith(("http://", "https://")):
+                    if connections_storage.get(("https", entity.offset)):
+                        link = f"https://{link}"
+                    elif connections_storage.get(("http", entity.offset)):
+                        link = f"http://{link}"
+                if link.startswith(("http://", "https://")):
+                    if link_preview_pure == link_pure:
+                        content = f"[{name}]({link})"
+                    else:
+                        content = f"[{name}](<{link}>)"
+            case "bold":
+                text = message_text[
+                    entity.offset : (entity.offset + entity.length)
+                ].replace("**", "\\**")
+                content = f"**{text}**"
+            case "italic":
+                text = message_text[
+                    entity.offset : (entity.offset + entity.length)
+                ].replace("*", "\\*")
+                content = f"*{text}*"
+            case "underline":
+                text = message_text[
+                    entity.offset : (entity.offset + entity.length)
+                ].replace("__", "\\__")
+                content = f"__{text}__"
+            case "strikethrough":
+                text = message_text[
+                    entity.offset : (entity.offset + entity.length)
+                ].replace("~~", "\\~~")
+                content = f"~~{text}~~"
+            case "spoiler":
+                text = message_text[
+                    entity.offset : (entity.offset + entity.length)
+                ].replace("||", "\\||")
+                content = f"||{text}||"
+            case "code":
+                text = message_text[
+                    entity.offset : (entity.offset + entity.length)
+                ].replace("`", "\\`")
+                content = f"`{text}`"
+            case _:
+                pass
+
+        message_text_discord += content
+        iterator = entity.offset + entity.length
+    message_text_discord += message_text[iterator:]
+
     async with httpx.AsyncClient() as ac:
-        chat_targets = await crud_targets.get_targets(channel_post.chat.id)
+        owner_id = await crud_chats.get_owner(channel_post.chat.id)
         for target in chat_targets:
             webhook = target["webhook"]
             key = target["key"]
             prefix = target["prefix"]
 
-            message_text_to_send = str(message_text_edited)
+            message_text_to_send = str(message_text_discord)
             if prefix:
                 message_text_to_send = f"{prefix}\n{message_text_to_send}"
             json = {"content": message_text_to_send}
 
-            if not key or key in message_text_original:
+            if not key or key in message_text:
                 try:
                     if pictures:
                         answer = await ac.post(webhook, files=pictures, data=json)
@@ -366,12 +533,13 @@ async def channel_post_handler(
                         if owner_id:
                             await bot.send_message(
                                 chat_id=owner_id,
-                                text=f"Channel message wasn't forwarded - {answer.status_code}",
+                                text=f"Channel message wasn't forwarded\n{answer.status_code}",
                             )
                 except Exception as e:
                     print(type(e))
                     print(str(e))
                     if owner_id:
                         await bot.send_message(
-                            chat_id=owner_id, text="Channel message wasn't forwarded"
+                            chat_id=owner_id,
+                            text=f"Channel message wasn't forwarded\n{str(e)}",
                         )

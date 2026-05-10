@@ -22,4 +22,3 @@ class Targets(Base):
     chat_id: Mapped[int] = mapped_column(BIGINT, nullable=False)
     key: Mapped[str]
     prefix: Mapped[str]
-    always_link_preview: Mapped[bool] = mapped_column(nullable=False)

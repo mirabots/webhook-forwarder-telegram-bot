@@ -6,13 +6,11 @@ from aiogram.fsm.context import FSMContext
 from crud import targets as crud_targets
 
 from ..utils import (
-    CallbackChooseAction,
     CallbackChooseChat,
     CallbackEmpty,
     FormTargetAdd,
     get_choosed_callback_text,
     get_keyboard_abort,
-    get_keyboard_action,
     get_keyboard_empty,
 )
 
@@ -136,9 +134,7 @@ async def target_add_key_form(
 
 
 @router.callback_query(CallbackEmpty.filter(F.action == "tgtak"))
-async def target_add_key_handler(
-    callback: types.CallbackQuery, callback_data: CallbackEmpty, state: FSMContext
-):
+async def target_add_key_handler(callback: types.CallbackQuery, state: FSMContext):
     state_data = await state.get_data()
 
     with suppress(TelegramBadRequest):
@@ -173,22 +169,19 @@ async def target_add_prefix_form(
             reply_markup=None,
         )
 
-        main_keyboard = get_keyboard_action("tgtalp", ["Yes", "No"])
-        abort_keyboard = get_keyboard_abort("tgta")
-        main_keyboard.attach(abort_keyboard)
-        await message.answer(
-            text="Always link preview:", reply_markup=main_keyboard.as_markup()
-        )
+        chat_id = state_data["chat_id"]
+        webhook = state_data["webhook"]
+        name = state_data["name"]
+        key = state_data["key"]
+        prefix = message.text.rstrip()
+        await state.clear()
 
-        state_data["prefix"] = message.text.rstrip()
-        await state.set_data(state_data)
-        await state.set_state(FormTargetAdd.always_link_preview)
+        await crud_targets.add_target(webhook, name, chat_id, key, prefix)
+        await message.answer(text="Target was added")
 
 
 @router.callback_query(CallbackEmpty.filter(F.action == "tgtap"))
-async def target_add_prefix_handler(
-    callback: types.CallbackQuery, callback_data: CallbackEmpty, state: FSMContext
-):
+async def target_add_prefix_handler(callback: types.CallbackQuery, state: FSMContext):
     state_data = await state.get_data()
 
     with suppress(TelegramBadRequest):
@@ -197,45 +190,13 @@ async def target_add_prefix_handler(
             reply_markup=None,
         )
 
-        main_keyboard = get_keyboard_action("tgtalp", ["Yes", "No"])
-        abort_keyboard = get_keyboard_abort("tgta")
-        main_keyboard.attach(abort_keyboard)
-        await callback.message.answer(
-            text="Always link preview:", reply_markup=main_keyboard.as_markup()
-        )
-
-        state_data["prefix"] = None
-        await state.set_data(state_data)
-        await state.set_state(FormTargetAdd.always_link_preview)
-
-
-@router.callback_query(CallbackChooseAction.filter(F.action == "tgtalp"))
-async def target_add_link_preview_final_handler(
-    callback: types.CallbackQuery,
-    callback_data: CallbackChooseAction,
-    state: FSMContext,
-):
-    link_preview = get_choosed_callback_text(
-        callback.message.reply_markup.inline_keyboard, callback.data
-    )
-
-    state_data = await state.get_data()
-
-    with suppress(TelegramBadRequest):
-        await callback.message.edit_text(
-            text=f"{link_preview} was choosen",
-            reply_markup=None,
-        )
-
         chat_id = state_data["chat_id"]
         webhook = state_data["webhook"]
         name = state_data["name"]
         key = state_data["key"]
-        prefix = state_data["prefix"]
-        always_link_preview = link_preview.lower() == "yes"
+        prefix = None
+
         await state.clear()
 
-        await crud_targets.add_target(
-            webhook, name, chat_id, key, prefix, always_link_preview
-        )
+        await crud_targets.add_target(webhook, name, chat_id, key, prefix)
         await callback.message.answer(text="Target was added")
