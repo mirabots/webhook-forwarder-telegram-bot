@@ -15,12 +15,7 @@ async def check_webhook(webhook: str) -> bool:
 
 
 async def add_target(
-    webhook: str,
-    name: str,
-    chat_id: int,
-    key: str | None,
-    prefix: str,
-    always_link_preview: bool,
+    webhook: str, name: str, chat_id: int, key: str | None, prefix: str
 ) -> bool:
     async with async_session() as session:
         async with session.begin():
@@ -40,7 +35,6 @@ async def add_target(
                         "chat_id": chat_id,
                         "key": key,
                         "prefix": prefix,
-                        "always_link_preview": always_link_preview,
                     }
                 )
             )
@@ -70,7 +64,7 @@ async def update_target(target_id: int, update_data: dict[str, str]) -> None:
             return True
 
 
-async def get_targets(chat_id: int) -> dict[str, dict[str, str]]:
+async def get_targets(chat_id: int) -> list[dict[str, int | str]]:
     async with async_session() as session:
         async with session.begin():
             db_targets = await session.scalars(
@@ -84,7 +78,6 @@ async def get_targets(chat_id: int) -> dict[str, dict[str, str]]:
                     "name": target.name,
                     "key": target.key,
                     "prefix": target.prefix,
-                    "always_link_preview": target.always_link_preview,
                 }
                 for target in db_targets
             ]
